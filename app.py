@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 from sqlalchemy import create_engine
+from statsmodels.regression.rolling import weight_parameters
 
 # -----------------------------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA STREAMLIT
@@ -13,6 +14,7 @@ st.set_page_config(
     page_title="Monitoramento de Risco Neonatal - UFMS / Ceará",
     page_icon="👶",
     layout="wide",
+    weight_parameters="700",
     initial_sidebar_state="expanded"
 )
 
@@ -160,7 +162,7 @@ with tab1:
 
 # --- ABA 2: GRÁFICOS DA COORTE (VIA POSTGRESQL ZIMAOS) ---
 with tab2:
-    st.subheader("Indicadores Monitorados (Ceará 202)")
+    st.subheader("Indicadores Monitorados (Ceará 2019 - 2024)")
 
     total_nascimentos = len(df_coorte)
     total_obitos = df_coorte['obito_neonatal'].sum()
@@ -182,10 +184,25 @@ with tab2:
         st.plotly_chart(fig_peso, use_container_width=True)
 
     with col_chart2:
-        taxa_apgar = df_coorte.groupby('apgar5', observed=False)['obito_neonatal'].mean() * 100
-        fig_apgar = px.line(x=taxa_apgar.index, y=taxa_apgar.values, title="Curva de Letalidade por Apgar (5º Minuto)",
-                            labels={'x': 'Nota Apgar 5', 'y': 'Taxa de Óbito (%)'}, markers=True,
-                            color_discrete_sequence=['#EF4444'])
+        # 1. Filtra mantendo apenas notas válidas de Apgar (0 a 10), ignorando o código 99 do SUS
+        df_apgar_valido = df_coorte[(df_coorte['apgar5'] >= 0) & (df_coorte['apgar5'] <= 10)]
+
+        # 2. Agrupa e calcula a taxa de letalidade (%)
+        taxa_apgar = df_apgar_valido.groupby('apgar5', observed=False)['obito_neonatal'].mean() * 100
+
+        # 3. Cria o gráfico de linha
+        fig_apgar = px.line(
+            x=taxa_apgar.index,
+            y=taxa_apgar.values,
+            title="Curva de Letalidade por Apgar (5º Minuto)",
+            labels={'x': 'Nota Apgar 5', 'y': 'Taxa de Óbito (%)'},
+            markers=True,
+            color_discrete_sequence=['#EF4444']
+        )
+
+        # 4. Força o eixo X a exibir todas as notas numéricas de 0 a 10 (de 1 em 1)
+        fig_apgar.update_xaxes(dtick=1, range=[-0.3, 10.3])
+
         st.plotly_chart(fig_apgar, use_container_width=True)
 
 # --- ABA 3: EXPLICABILIDADE CLÍNICA (ODDS RATIO) ---
