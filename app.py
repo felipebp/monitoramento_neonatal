@@ -89,45 +89,38 @@ if prob_individual < p80_cut:
     categoria_risco = "Baixo Risco"
     cor_categoria = "#10B981"
     classe_card = "card-baixo"
-    recomendacao = """
-        <p><strong>Conduta Recomendada (Atenção Primária):</strong></p>
-        <ul>
-            <li>Acompanhamento puerperal padrão de rotina.</li>
-            <li>Agendamento da 1ª consulta de puericultura na UBS em até 15 dias.</li>
-            <li>Orientação regular sobre aleitamento e calendário vacinal.</li>
-        </ul>
-    """
+    recomendacao = (
+        "<p><strong>Conduta Recomendada (Atenção Primária):</strong></p>"
+        "<ul>"
+        "<li>Acompanhamento puerperal padrão de rotina.</li>"
+        "<li>Agendamento da 1ª consulta de puericultura na UBS em até 15 dias.</li>"
+        "<li>Orientação regular sobre aleitamento e calendário vacinal.</li>"
+        "</ul>"
+    )
 elif prob_individual < p95_cut:
     categoria_risco = "Médio Risco"
     cor_categoria = "#F59E0B"
     classe_card = "card-medio"
-    recomendacao = """
-        <p><strong>Conduta Recomendada (Vigilância Intensificada):</strong></p>
-        <ul>
-            <li>Visita domiciliar de enfermagem <strong>obrigatória</strong> na 1ª semana de vida.</li>
-            <li>Antecipar 1ª consulta médica na UBS para no máximo 7 dias após a alta.</li>
-            <li>Monitoramento prioritário do ganho ponderal e avaliação de icterícia.</li>
-        </ul>
-    """
+    recomendacao = (
+        "<p><strong>Conduta Recomendada (Vigilância Intensificada):</strong></p>"
+        "<ul>"
+        "<li>Visita domiciliar de enfermagem <strong>obrigatória</strong> na 1ª semana de vida.</li>"
+        "<li>Antecipar 1ª consulta médica na UBS para no máximo 7 dias após a alta.</li>"
+        "<li>Monitoramento prioritário do ganho ponderal e avaliação de icterícia.</li>"
+        "</ul>"
+    )
 else:
     categoria_risco = "Alto Risco"
     cor_categoria = "#EF4444"
     classe_card = "card-alto"
-    recomendacao = """
-        <p><strong>Conduta Recomendada (Prioridade Absoluta):</strong></p>
-        <ul>
-            <li>Avaliação pediátrica imediata; verificar indicação clínica para internação/UTI.</li>
-            <li>Acionar protocolo de busca ativa e articulação direta com a maternidade.</li>
-            <li>Acompanhamento contínuo e rigoroso pela equipe de Saúde da Família.</li>
-        </ul>
-    """
-
-st.markdown(f"""
-    <div class="{classe_card}">
-        <h3>Diretriz Clínica - {categoria_risco}</h3>
-        {recomendacao}
-    </div>
-""", unsafe_allow_html=True)
+    recomendacao = (
+        "<p><strong>Conduta Recomendada (Prioridade Absoluta):</strong></p>"
+        "<ul>"
+        "<li>Avaliação pediátrica imediata; verificar indicação clínica para internação/UTI.</li>"
+        "<li>Acionar protocolo de busca ativa e articulação direta com a maternidade.</li>"
+        "<li>Acompanhamento contínuo e rigoroso pela equipe de Saúde da Família.</li>"
+        "</ul>"
+    )
 
 # -----------------------------------------------------------------------------
 # ESTRUTURA VISUAL: ABAS DO DASHBOARD
@@ -168,12 +161,13 @@ with tab1:
         fig_gauge.update_layout(height=240, margin=dict(l=20, r=20, t=30, b=20))
         st.plotly_chart(fig_gauge, use_container_width=True)
     with col_pred2:
-        st.markdown(f"""
-            <div class="{classe_card}">
-                <h3>Diretriz Clínica - {categoria_risco}</h3>
-                {recomendacao}
-            </div>
-        """, unsafe_allow_html=True)
+        html_card = (
+            f'<div class="{classe_card}">'
+            f'<h3>Diretriz Clínica - {categoria_risco}</h3>'
+            f'{recomendacao}'
+            f'</div>'
+        )
+        st.markdown(html_card, unsafe_allow_html=True)
 
 # --- ABA 2: GRÁFICOS DA COORTE (VIA POSTGRESQL ZIMAOS) ---
 with tab2:
