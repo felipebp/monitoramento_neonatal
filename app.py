@@ -12,20 +12,24 @@ from statsmodels.regression.rolling import weight_parameters
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Monitoramento de Risco Neonatal - UFMS / Ceará",
-    page_icon="👶",
+    page_icon="👶🏽",
     layout="wide",
-    weight_parameters="700",
     initial_sidebar_state="expanded"
 )
 
 # Estilização CSS customizada
 st.markdown("""
     <style>
-    .main-header { font-size: 2.2rem; color: #1E3A8A; font-weight: 700; margin-bottom: 0px; }
-    .sub-header { font-size: 1.1rem; color: #4B5563; margin-bottom: 20px; }
+    .main-header { font-size: 3.2rem !important; color: #f66151; font-weight: 700; margin-bottom: 0px; }
+    .sub-header { font-size: 1.2rem !important; color: #4B5563; margin-bottom: 20px; }
     .card-baixo { background-color: #D1FAE5; border-left: 6px solid #10B981; padding: 15px; border-radius: 8px; color: #065F46; }
     .card-medio { background-color: #FEF3C7; border-left: 6px solid #F59E0B; padding: 15px; border-radius: 8px; color: #92400E; }
     .card-alto { background-color: #FEE2E2; border-left: 6px solid #EF4444; padding: 15px; border-radius: 8px; color: #991B1B; }
+    .card-baixo h3, .card-medio h3, .card-alto h3 { margin-top: 0px !important; margin-bottom: 10px !important; font-size: 1.35rem !important; color: inherit !important; }
+    .card-baixo p, .card-medio p, .card-alto p { margin-bottom: 8px !important; font-size: 1rem !important; }
+    .card-baixo ul, .card-medio ul, .card-alto ul { margin-bottom: 0px !important; padding-left: 22px !important; }
+    [data-testid="stTabs"] [role="tab"], [data-testid="stTabs"] [role="tab"] * { font-size: 1.0rem !important; font-weight: 700 !important; }
+    [data-testid="stTabs"] [role="tab"] { padding: 12px 24px !important; height: auto !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -36,9 +40,8 @@ st.markdown("""
 def carregar_modelo_preditivo():
     artefato = joblib.load('modelo_neonatal.pkl')
     return artefato['modelo'], artefato['p80'], artefato['p95'], artefato['colunas']
+@st.cache_data
 
-@st.cache_data
-@st.cache_data
 def carregar_dados_coorte():
     # Conecta diretamente no banco de dados hospedado no ZimaOS
     db_url = "postgresql+psycopg2://casaos:casaos@192.168.4.2:5432/casaos"
@@ -54,9 +57,7 @@ df_coorte = carregar_dados_coorte()
 # CABEÇALHO DO DASHBOARD
 # -----------------------------------------------------------------------------
 st.markdown('<p class="main-header">👶 Monitoramento do Risco de Vida Neonatal</p>', unsafe_allow_html=True)
-st.markdown(
-    '<p class="sub-header">Suporte à Decisão Clínica na Atenção Básica | Projeto de Extensão UFMS - Aquiraz/CE</p>',
-    unsafe_allow_html=True)
+st.markdown('<p class="sub-header" </p>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # BARRA LATERAL: INPUT DE NOVOS DADOS PARA PREDIÇÃO
@@ -88,32 +89,45 @@ if prob_individual < p80_cut:
     categoria_risco = "Baixo Risco"
     cor_categoria = "#10B981"
     classe_card = "card-baixo"
-    recomendacao = (
-        "**Conduta Recomendada (Atenção Primária):**\n"
-        "- Acompanhamento puerperal padrão de rotina.\n"
-        "- Agendamento da 1ª consulta de puericultura na UBS em até 15 dias.\n"
-        "- Orientação regular sobre aleitamento e calendário vacinal."
-    )
+    recomendacao = """
+        <p><strong>Conduta Recomendada (Atenção Primária):</strong></p>
+        <ul>
+            <li>Acompanhamento puerperal padrão de rotina.</li>
+            <li>Agendamento da 1ª consulta de puericultura na UBS em até 15 dias.</li>
+            <li>Orientação regular sobre aleitamento e calendário vacinal.</li>
+        </ul>
+    """
 elif prob_individual < p95_cut:
     categoria_risco = "Médio Risco"
     cor_categoria = "#F59E0B"
     classe_card = "card-medio"
-    recomendacao = (
-        "**Conduta Recomendada (Vigilância Intensificada):**\n"
-        "- Visita domiciliar de enfermagem **obrigatória** na 1ª semana de vida.\n"
-        "- Antecipar 1ª consulta médica na UBS para no máximo 7 dias após a alta.\n"
-        "- Monitoramento prioritário do ganho ponderal e avaliação de icterícia."
-    )
+    recomendacao = """
+        <p><strong>Conduta Recomendada (Vigilância Intensificada):</strong></p>
+        <ul>
+            <li>Visita domiciliar de enfermagem <strong>obrigatória</strong> na 1ª semana de vida.</li>
+            <li>Antecipar 1ª consulta médica na UBS para no máximo 7 dias após a alta.</li>
+            <li>Monitoramento prioritário do ganho ponderal e avaliação de icterícia.</li>
+        </ul>
+    """
 else:
     categoria_risco = "Alto Risco"
     cor_categoria = "#EF4444"
     classe_card = "card-alto"
-    recomendacao = (
-        "**Conduta Recomendada (Prioridade Absoluta):**\n"
-        "- Avaliação pediátrica imediata; verificar indicação clínica para internação/UTI.\n"
-        "- Acionar protocolo de busca ativa e articulação direta com a maternidade.\n"
-        "- Acompanhamento contínuo e rigoroso pela equipe de Saúde da Família."
-    )
+    recomendacao = """
+        <p><strong>Conduta Recomendada (Prioridade Absoluta):</strong></p>
+        <ul>
+            <li>Avaliação pediátrica imediata; verificar indicação clínica para internação/UTI.</li>
+            <li>Acionar protocolo de busca ativa e articulação direta com a maternidade.</li>
+            <li>Acompanhamento contínuo e rigoroso pela equipe de Saúde da Família.</li>
+        </ul>
+    """
+
+st.markdown(f"""
+    <div class="{classe_card}">
+        <h3>Diretriz Clínica - {categoria_risco}</h3>
+        {recomendacao}
+    </div>
+""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # ESTRUTURA VISUAL: ABAS DO DASHBOARD
@@ -153,12 +167,13 @@ with tab1:
         ))
         fig_gauge.update_layout(height=240, margin=dict(l=20, r=20, t=30, b=20))
         st.plotly_chart(fig_gauge, use_container_width=True)
-
     with col_pred2:
-        st.markdown(f'<div class="{classe_card}">', unsafe_allow_html=True)
-        st.markdown(f"### Diretriz Clínica - {categoria_risco}")
-        st.markdown(recomendacao)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="{classe_card}">
+                <h3>Diretriz Clínica - {categoria_risco}</h3>
+                {recomendacao}
+            </div>
+        """, unsafe_allow_html=True)
 
 # --- ABA 2: GRÁFICOS DA COORTE (VIA POSTGRESQL ZIMAOS) ---
 with tab2:
