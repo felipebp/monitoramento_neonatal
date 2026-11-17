@@ -67,6 +67,7 @@ O desafio técnico deste projeto consiste em **unificar duas bases governamentai
 │   └── 📄 exploracao_e_modelagem.ipynb      # EDA, seleção de variáveis, treino e avaliação
 ├── 🟩 sql/
 │   └── 📄 linkage_ceara.sql                 # Script SQL de integração SINASC + SIM e regras de filtro
+    └── 📄 validacao_importacao.sql          # Script SQL para validação do linkage
 ├── 🟩 src/
 │   ├── 📄 01_importar_dados_brutos.py       # Extração dos microdados via Base dos Dados (BigQuery)
 │   ├── 📄 02_sinasc_parquet_to_postgres.py  # Carga da tabela SINASC no PostgreSQL
