@@ -60,29 +60,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+PARQUET_FALLBACK = BASE_DIR / "data" / "processed" / "coorte_ceara.parquet"
 
-def obter_db_url() -> str:
-    """Obtém a URL do PostgreSQL via .env, variáveis de ambiente ou st.secrets."""
+def obter_db_url() -> str | None:
+    """Retorna a URL do PostgreSQL se configurada no ambiente, ou None para modo offline."""
     if os.getenv("DATABASE_URL"):
         return os.getenv("DATABASE_URL")
 
-    # Suporte opcional ao Streamlit Community Cloud (st.secrets)
     try:
         if "DATABASE_URL" in st.secrets:
             return st.secrets["DATABASE_URL"]
     except Exception:
         pass
 
-    user = os.getenv("DB_USER", "postgres")
     password = os.getenv("DB_PASSWORD")
+    if not password:
+        return None
+
+    user = os.getenv("DB_USER", "postgres")
     host = os.getenv("DB_HOST", "localhost")
     port = os.getenv("DB_PORT", "5432")
     dbname = os.getenv("DB_NAME", "datasus_neonatal")
-
-    if not password:
-        st.error("Credenciais do PostgreSQL não encontradas. Configure o arquivo '.env' na raiz do projeto.")
-        st.stop()
-
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
 
 
@@ -99,26 +97,27 @@ def carregar_modelo_preditivo():
 
 
 @st.cache_data
-def carregar_dados_coorte():
-    engine = create_engine(obter_db_url())
-    query = """
-        SELECT 
-            peso, 
-            apgar5, 
-            semana_gestacao, 
-            idade_mae, 
-            id_anomalia,
-            sexo, 
-            obito_neonatal 
-        FROM analytics.base_neonatal_pura
-        WHERE TRIM(sexo) IN ('M', 'F')
-          AND TRIM(id_anomalia) IN ('1', '2')
-          AND apgar5 BETWEEN 0 AND 10
-          AND semana_gestacao IS NOT NULL
-          AND peso IS NOT NULL
-          AND idade_mae IS NOT NULL;
-    """
-    return pd.read_sql(query, con=engine)
+def carregar_dados_coorte() -> pd.DataFrame:
+    db_url = obter_db_url()
+    if db_url:
+        engine = create_engine(db_url)
+        query = """
+            SELECT peso, apgar5, semana_gestacao, idade_mae, id_anomalia, sexo, obito_neonatal
+            FROM analytics.base_neonatal_pura
+            WHERE TRIM(sexo) IN ('M', 'F')
+              AND TRIM(id_anomalia) IN ('1', '2')
+              AND apgar5 BETWEEN 0 AND 10
+              AND semana_gestacao IS NOT NULL
+              AND peso IS NOT NULL
+              AND idade_mae IS NOT NULL;
+        """
+        return pd.read_sql(query, con=engine)
+
+    if PARQUET_FALLBACK.exists():
+        return pd.read_parquet(PARQUET_FALLBACK)
+
+    st.error("Nenhuma fonte de dados (PostgreSQL ou Parquet local) encontrada.")
+    st.stop()
 
 
 # Executa as funções em cache

@@ -1,7 +1,4 @@
-basedosdados
-ipykernel
 joblib
-jupyterlab
 numpy
 pandas
 plotly
