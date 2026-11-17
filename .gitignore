@@ -1,0 +1,16 @@
+# Ambientes virtuais e credenciais
+.venv/
+.env
+
+# Configurações locais da IDE (PyCharm / VS Code)
+.idea/
+.vscode/
+
+# Ficheiros temporários do Python e Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Dados locais temporários (armazenados no PostgreSQL)
+data/raw/*.parquet
+data/processed/*.parquet

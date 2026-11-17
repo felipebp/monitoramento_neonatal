@@ -38,7 +38,7 @@ st.markdown("""
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def carregar_modelo_preditivo():
-    artefato = joblib.load('modelo_neonatal.pkl')
+    artefato = joblib.load('models/modelo_neonatal.pkl')
     return artefato['modelo'], artefato['p80'], artefato['p95'], artefato['colunas']
 @st.cache_data
 
