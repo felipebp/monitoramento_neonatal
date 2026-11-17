@@ -1,72 +1,134 @@
-# 👶🏽 Neonatal Mortality Risk Monitoring & Predictive Analytics (Ceará, 2019–2024)
+# 🩺 NeonatoScan — Monitoramento e Estratificação de Risco de Mortalidade Neonatal (Ceará)
 
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
-![Scikit-Learn](https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
-![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
+[![Streamlit App](https://img.shields.io/badge/Live%20Demo-neonatoscan.site-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://neonatoscan.site)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Analytics-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-Logistic%20Regression-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
 
-## 📌 Project Overview
-This end-to-end Data Science and Public Health Analytics project investigates neonatal mortality determinants and builds an interpretable predictive screening pipeline for newborns in the state of **Ceará, Brazil (2019–2024)**.
+Pipeline ponta a ponta de **Engenharia e Ciência de Dados** desenvolvido para integrar registros públicos de nascimentos e óbitos do DATASUS (Ceará), identificar fatores críticos associados ao óbito neonatal precoce e tardio (0 a 27 dias de vida) e disponibilizar uma ferramenta interativa de apoio à triagem clínica.
 
-By integrating and cross-referencing official public health records from **DATASUS**—specifically **SINASC** (Live Births Information System) and **SIM** (Mortality Information System)—the solution processes **594,740 birth records** to identify high-risk clinical and sociodemographic profiles, delivering actionable insights through an interactive **Streamlit** clinical decision-support dashboard.
+🔗 **Aplicação online:** [https://neonatoscan.site](https://neonatoscan.site)
 
 ---
 
-## 🎯 Business & Public Health Problem
-Neonatal mortality (deaths occurring within the first 28 days of life) represents the largest component of infant mortality in Brazil and is strongly linked to preventable perinatal factors, maternal care access, and congenital conditions. Public health managers need interpretable, data-driven tools capable of:
-1. **Quantifying risk factors** across large-scale epidemiological cohorts.
-2. **Supporting early triage** at birth using standardized clinical indicators (such as Apgar scores, birth weight, gestational age, and congenital anomalies).
-3. **Balancing sensitivity and clinical interpretability**, avoiding "black-box" predictions in healthcare settings.
+## 🎯 Problema de Negócio e Contexto
+
+No Brasil, a mortalidade neonatal representa a principal parcela da mortalidade infantil, estando fortemente associada a condições perinatais preveníveis, prematuridade, baixo peso ao nascer e qualidade da assistência ao parto.
+
+O desafio técnico deste projeto consiste em **unificar duas bases governamentais originalmente isoladas** — **SINASC** (Sistema de Informações sobre Nascidos Vivos) e **SIM** (Sistema de Informações sobre Mortalidade) — para construir uma coorte epidemiológica consolidada e transformar dados históricos em **estratificação de risco interpretável** para profissionais de saúde e gestores públicos.
 
 ---
 
-## 🏗️ Data Architecture & Pipeline
+## 🏗️ Arquitetura do Pipeline
 
 ```text
-[DATASUS Microdata: SINASC & SIM (2019–2024)]
+[ Google BigQuery (Base dos Dados / DATASUS) ]
                      │
-                     ▼
-   [PostgreSQL Relational Data Warehouse]
-   (Schema normalization, indexing & cohort linkage)
+                     ▼  (src/01_importar_dados_brutos.py)
+         [ data/raw/*.parquet ]
                      │
-                     ▼
-   [Preprocessing & Feature Engineering (Python)]
-   (SUS domain cleaning, missing/ignored code handling)
+                     ▼  (src/02_*.py & src/03_*.py)
+       [ PostgreSQL — Camada Staging ]
                      │
-                     ▼
-   [Predictive Modeling (Scikit-Learn)]
-   (Balanced Logistic Regression | ROC-AUC: 0.9493)
-                     │
-                     ▼
-   [Streamlit Web Application]
-   (Epidemiological Overview + Individual Risk Screening + Odds Ratio Explainability)
+                     ▼  (sql/linkage_ceara.sql)
+   [ PostgreSQL — analytics.base_neonatal_pura ]  (> 594 mil registros)
+          │                        │
+          ▼                        ▼
+[ notebooks/exploracao... ]   [ data/processed/coorte_ceara.parquet ]
+          │                        │
+          ▼                        ▼
+[ models/modelo_neonatal.pkl ] ──► [ app.py (Streamlit Dashboard) ]
 ```
-### Data Engineering & Cleaning (PostgreSQL + Python)
 
-   - Cohort Scale: 594,740 live birth records from Ceará (2019–2024) stored and queried via PostgreSQL.
+## ⚙️ Principais Decisões de Engenharia e Modelagem
 
-   - Domain-Specific Data Hygiene:
+* **Linkage Determinístico em SQL (`sql/linkage_ceara.sql`):** Cruzamento relacional entre SINASC e SIM utilizando a chave oficial da Declaração de Nascido Vivo (`numero_dn`), com higienização de registros inconsistentes e tipagem estrita para garantir integridade referencial em mais de **594 mil nascimentos**.
+* **Interpretabilidade Clínica com Regressão Logística:** Optou-se por um modelo linear generalizado calibrado para permitir a leitura direta dos coeficientes em **Odds Ratio (Razão de Chances)**, evidenciando o peso isolado de variáveis como *Apgar no 5º minuto*, *peso ao nascer*, *semanas de gestação*, *idade materna*, *presença de anomalia congênita* e *sexo*.
+* **Estratificação por Percentis de Risco (P80 / P95):** Em vez de um corte binário genérico de 50%, os limiares de alerta foram calibrados sobre a distribuição real de probabilidades da coorte para separar perfis de **Risco Habitual**, **Atenção Prioritária (≥ P80)** e **Alto Risco / UTI Neonatal (≥ P95)**.
+* **Arquitetura Híbrida (PostgreSQL + Fallback Parquet):** O `app.py` conecta-se diretamente ao banco PostgreSQL quando as credenciais estão configuradas no `.env`, mas alterna automaticamente para a coorte otimizada em `data/processed/coorte_ceara.parquet` caso executado em ambiente offline ou sem banco ativo.
 
-     - Filtered standardized SUS "ignored/unknown" sentinel codes (e.g., removing code 99 in apgar5 and sexo_IGN records) to prevent synthetic distortion in clinical distributions.
+## 📊 Funcionalidades do Painel (`app.py`)
 
-     - Engineered clinical determinants including 5th-minute Apgar score (apgar5), birth weight, gestational weeks, maternal profile, and congenital anomaly indicator (anomalia_cong).
-   
-### Modeling & Clinical Explainability
+* **Panorama Epidemiológico:** Indicadores gerais da coorte estadual, taxa de mortalidade neonatal e distribuição demográfica e clínica dos nascimentos.
+* **Fatores de Risco (Odds Ratio):** Visualização divergente bicolor que destaca fatores agravantes e protetores com base nos pesos do modelo treinado.
+* **Simulador de Triagem Neonatal:** Formulário interativo para inserção de parâmetros clínicos do recém-nascido em tempo real, retornando a probabilidade estimada de risco e a faixa de encaminhamento sugerida.
 
-  - Algorithm: Logistic Regression with class-imbalance compensation (class_weight='balanced') to prioritize recall on rare, high-severity neonatal mortality events.
+## 📂 Estrutura do Repositório
+```text
+🟦 monitoramento_neonatal/
+├── 🟩 data/
+│   ├── 🟨 processed/
+│   │   └── 📄 coorte_ceara.parquet          # Coorte consolidada para execução offline do painel
+│   └── 🟨 raw/
+│       └── 📄 .gitkeep                      # Diretório de aterrissagem dos microdados brutos
+├── 🟩 models/
+│   └── 📄 modelo_neonatal.pkl               # Artefato serializado do modelo e limiares de corte
+├── 🟩 notebooks/
+│   └── 📄 exploracao_e_modelagem.ipynb      # EDA, seleção de variáveis, treino e avaliação
+├── 🟩 sql/
+│   └── 📄 linkage_ceara.sql                 # Script SQL de integração SINASC + SIM e regras de filtro
+├── 🟩 src/
+│   ├── 📄 01_importar_dados_brutos.py       # Extração dos microdados via Base dos Dados (BigQuery)
+│   ├── 📄 02_sinasc_parquet_to_postgres.py  # Carga da tabela SINASC no PostgreSQL
+│   ├── 📄 03_sim_parquet_to_postgres.py     # Carga da tabela SIM no PostgreSQL
+│   └── 📄 04_validacao.py                   # Auditoria de volumetria, nulos e integridade pós-carga
+├── 📄 .env.example                          # Template de variáveis de conexão com o PostgreSQL
+├── 📄 .gitignore
+├── 📄 app.py                                # Aplicação web interativa (Streamlit + Plotly)
+├── 📄 launcher_linux_mac.sh                 # Script de inicialização automática (Linux / macOS)
+├── 📄 launcher_windows.bat                  # Script de inicialização automática (Windows)
+├── 📄 README.md
+├── 📄 requirements-dev.txt                  # Dependências para extração BigQuery e notebooks
+└── 📄 requirements.txt                      # Dependências enxutas para execução do dashboard
+```
+## 🚀 Como Executar Localmente
 
-  - Performance: Achieved 0.9493 ROC-AUC on holdout evaluation.
+O projeto conta com inicializadores automatizados que criam o ambiente virtual isolado (`.venv`), instalam as dependências pré-compiladas e abrem o dashboard no navegador utilizando a base local em Parquet (sem necessidade de configurar banco de dados).
 
-  - Interpretability: Extracted Odds Ratios (OR) directly from model coefficients so healthcare professionals can understand the exact weight and direction of each clinical variable in an individual risk score.
+### Opção 1: Execução Automatizada (Recomendada)
 
-### 🖥️ Dashboard Features (Streamlit)
-The interactive web application is structured into three core analytical modules:
+* **Windows:** Dê um duplo clique no arquivo `launcher_windows.bat` na raiz do projeto.
+* **Linux / macOS:** No terminal, execute:
+  ```bash
+  chmod +x launcher_linux_mac.sh
+  ./launcher_linux_mac.sh
+  ```
 
-- Cohort Epidemiology Indicators: Macro-level KPIs, temporal evolution (2019–2024), birth weight/Apgar distributions, and mortality rates across Ceará.
+### Opção 2: Execução Manual via Terminal
 
-- Individual Risk Screening Simulator: Real-time clinical calculator allowing users to input newborn and maternal parameters to estimate mortality risk probability and risk tier.
+```bash
+git clone [https://github.com/felipebp/monitoramento_neonatal.git](https://github.com/felipebp/monitoramento_neonatal.git)
+cd monitoramento_neonatal
 
-- Model Explainability (Odds Ratios): Visual breakdown of clinical risk drivers (anomalia_cong, apgar5, prematurity, low birth weight) for transparent clinical validation.
+python -m venv .venv
+# Linux/macOS: source .venv/bin/activate | Windows: .venv\Scripts\activate
 
+pip install --prefer-binary -r requirements.txt
+streamlit run app.py
+```
 
+### Opção 3: Reproduzindo o Pipeline Completo com PostgreSQL
+
+Caso deseje executar a ingestão e o *linkage* em uma instância própria do PostgreSQL:
+
+1. Instale também as dependências de extração: `pip install -r requirements-dev.txt`
+2. Copie o arquivo `.env.example` para `.env` e preencha as credenciais do seu servidor PostgreSQL.
+3. Execute os scripts da pasta `src/` na ordem numérica (`01` a `04`) e rode `sql/linkage_ceara.sql` no banco antes de iniciar o `app.py`.
+
+## 🛠️ Stack Tecnológica
+
+- Linguagem & Manipulação de Dados: Python, Pandas, NumPy, PyArrow
+
+- Banco de Dados & Engenharia: PostgreSQL, SQLAlchemy, Psycopg2, Google BigQuery (basedosdados)
+
+- Machine Learning: Scikit-Learn, Joblib
+
+- Visualização & Deploy: Streamlit, Plotly
+
+## 👤 Autor
+
+Felipe Barros Pereira
+
+Graduando em Ciência de Dados — Universidade Federal de Mato Grosso do Sul (UFMS)
+
+Projeto desenvolvido para fins acadêmicos e de portfólio em Ciência e Engenharia de Dados.
