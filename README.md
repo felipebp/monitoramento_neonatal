@@ -41,3 +41,21 @@ Neonatal mortality (deaths occurring within the first 28 days of life) represent
                      ▼
    [Streamlit Web Application]
    (Epidemiological Overview + Individual Risk Screening + Odds Ratio Explainability)
+```
+1. Data Engineering & Cleaning (PostgreSQL + Python)
+
+   - Cohort Scale: 594,740 live birth records from Ceará (2019–2024) stored and queried via PostgreSQL.
+
+   - Domain-Specific Data Hygiene:
+
+     - Filtered standardized SUS "ignored/unknown" sentinel codes (e.g., removing code 99 in apgar5 and sexo_IGN records) to prevent synthetic distortion in clinical distributions.
+
+     - Engineered clinical determinants including 5th-minute Apgar score (apgar5), birth weight, gestational weeks, maternal profile, and congenital anomaly indicator (anomalia_cong).
+   
+2. Modeling & Clinical Explainability
+
+  - Algorithm: Logistic Regression with class-imbalance compensation (class_weight='balanced') to prioritize recall on rare, high-severity neonatal mortality events.
+
+  - Performance: Achieved 0.9493 ROC-AUC on holdout evaluation.
+
+  - Interpretability: Extracted Odds Ratios (OR) directly from model coefficients so healthcare professionals can understand the exact weight and direction of each clinical variable in an individual risk score.
