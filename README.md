@@ -42,7 +42,7 @@ Neonatal mortality (deaths occurring within the first 28 days of life) represent
    [Streamlit Web Application]
    (Epidemiological Overview + Individual Risk Screening + Odds Ratio Explainability)
 ```
-1. Data Engineering & Cleaning (PostgreSQL + Python)
+### Data Engineering & Cleaning (PostgreSQL + Python)
 
    - Cohort Scale: 594,740 live birth records from Ceará (2019–2024) stored and queried via PostgreSQL.
 
@@ -52,10 +52,21 @@ Neonatal mortality (deaths occurring within the first 28 days of life) represent
 
      - Engineered clinical determinants including 5th-minute Apgar score (apgar5), birth weight, gestational weeks, maternal profile, and congenital anomaly indicator (anomalia_cong).
    
-2. Modeling & Clinical Explainability
+### Modeling & Clinical Explainability
 
   - Algorithm: Logistic Regression with class-imbalance compensation (class_weight='balanced') to prioritize recall on rare, high-severity neonatal mortality events.
 
   - Performance: Achieved 0.9493 ROC-AUC on holdout evaluation.
 
   - Interpretability: Extracted Odds Ratios (OR) directly from model coefficients so healthcare professionals can understand the exact weight and direction of each clinical variable in an individual risk score.
+
+### 🖥️ Dashboard Features (Streamlit)
+The interactive web application is structured into three core analytical modules:
+
+- Cohort Epidemiology Indicators: Macro-level KPIs, temporal evolution (2019–2024), birth weight/Apgar distributions, and mortality rates across Ceará.
+
+- Individual Risk Screening Simulator: Real-time clinical calculator allowing users to input newborn and maternal parameters to estimate mortality risk probability and risk tier.
+
+- Model Explainability (Odds Ratios): Visual breakdown of clinical risk drivers (anomalia_cong, apgar5, prematurity, low birth weight) for transparent clinical validation.
+
+
