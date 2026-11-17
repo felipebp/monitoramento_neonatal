@@ -5,7 +5,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 from sqlalchemy import create_engine
-from statsmodels.regression.rolling import weight_parameters
 
 # -----------------------------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA STREAMLIT
@@ -20,18 +19,37 @@ st.set_page_config(
 # Estilização CSS customizada
 st.markdown("""
     <style>
+
     .main-header { font-size: 3.2rem !important; color: #f66151; font-weight: 700; margin-bottom: 0px; }
     .sub-header { font-size: 1.2rem !important; color: #4B5563; margin-bottom: 20px; }
-    .card-baixo { background-color: #D1FAE5; border-left: 6px solid #10B981; padding: 15px; border-radius: 8px; color: #065F46; }
-    .card-medio { background-color: #FEF3C7; border-left: 6px solid #F59E0B; padding: 15px; border-radius: 8px; color: #92400E; }
-    .card-alto { background-color: #FEE2E2; border-left: 6px solid #EF4444; padding: 15px; border-radius: 8px; color: #991B1B; }
-    .card-baixo h3, .card-medio h3, .card-alto h3 { margin-top: 0px !important; margin-bottom: 10px !important; font-size: 1.35rem !important; color: inherit !important; }
-    .card-baixo p, .card-medio p, .card-alto p { margin-bottom: 8px !important; font-size: 1rem !important; }
-    .card-baixo ul, .card-medio ul, .card-alto ul { margin-bottom: 0px !important; padding-left: 22px !important; }
+
+    .card-baixo, .card-medio, .card-alto {
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .card-baixo { background-color: #D1FAE5; border-left: 6px solid #10B981; color: #065F46; }
+    .card-medio { background-color: #FEF3C7; border-left: 6px solid #F59E0B; color: #92400E; }
+    .card-alto  { background-color: #FEE2E2; border-left: 6px solid #EF4444; color: #991B1B; }
+
+    .card-baixo h3, .card-medio h3, .card-alto h3 {
+        margin-top: 0px !important;
+        margin-bottom: 10px !important;
+        font-size: 1.35rem !important;
+        color: inherit !important;
+    }
+
+    .card-baixo ul, .card-medio ul, .card-alto ul {
+        margin-bottom: 0px !important;
+        padding-left: 22px !important;
+    }
+
     [data-testid="stTabs"] [role="tab"], [data-testid="stTabs"] [role="tab"] * { font-size: 1.0rem !important; font-weight: 700 !important; }
     [data-testid="stTabs"] [role="tab"] { padding: 12px 24px !important; height: auto !important; }
+
     </style>
 """, unsafe_allow_html=True)
+
 
 # -----------------------------------------------------------------------------
 # CARREGAMENTO DO MODELO (.PKL) E DA BASE (POSTGRESQL NO ZIMAOS)
@@ -40,14 +58,32 @@ st.markdown("""
 def carregar_modelo_preditivo():
     artefato = joblib.load('modelo_neonatal.pkl')
     return artefato['modelo'], artefato['p80'], artefato['p95'], artefato['colunas']
-@st.cache_data
 
+
+@st.cache_data
 def carregar_dados_coorte():
-    # Conecta diretamente no banco de dados hospedado no ZimaOS
+    # Conecta diretamente no banco de dados hospedado no ZimaOS e aplica o saneamento
     db_url = "postgresql+psycopg2://casaos:casaos@192.168.4.2:5432/casaos"
     engine = create_engine(db_url)
-    query = "SELECT peso, apgar5, semana_gestacao, idade_mae, sexo, obito_neonatal FROM analytics.base_neonatal_pura;"
+    query = """
+        SELECT 
+            peso, 
+            apgar5, 
+            semana_gestacao, 
+            idade_mae, 
+            id_anomalia,
+            sexo, 
+            obito_neonatal 
+        FROM analytics.base_neonatal_pura
+        WHERE TRIM(sexo) IN ('M', 'F')
+          AND TRIM(id_anomalia) IN ('1', '2')
+          AND apgar5 BETWEEN 0 AND 10
+          AND semana_gestacao IS NOT NULL
+          AND peso IS NOT NULL
+          AND idade_mae IS NOT NULL;
+    """
     return pd.read_sql(query, con=engine)
+
 
 # Executa as funções em cache
 modelo, p80_cut, p95_cut, colunas_esperadas = carregar_modelo_preditivo()
@@ -57,7 +93,8 @@ df_coorte = carregar_dados_coorte()
 # CABEÇALHO DO DASHBOARD
 # -----------------------------------------------------------------------------
 st.markdown('<p class="main-header">👶 Monitoramento do Risco de Vida Neonatal</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header" </p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Sistema de Apoio à Decisão Clínica na Atenção Primária (Aquiraz / Ceará)</p>',
+            unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # BARRA LATERAL: INPUT DE NOVOS DADOS PARA PREDIÇÃO
@@ -70,6 +107,11 @@ input_apgar5 = st.sidebar.slider("Escore de Apgar (5º Minuto)", min_value=0, ma
 input_semana = st.sidebar.number_input("Semanas de Gestação", min_value=20, max_value=42, value=39, step=1)
 input_idade_mae = st.sidebar.number_input("Idade da Mãe (anos)", min_value=12, max_value=55, value=25, step=1)
 input_sexo = st.sidebar.selectbox("Sexo do Recém-Nascido", options=["Masculino", "Feminino"])
+input_anomalia = st.sidebar.selectbox(
+    "Anomalia Congênita Identificada?",
+    options=["Não", "Sim"],
+    help="Campo IDANOMAL da Declaração de Nascido Vivo (DNV)."
+)
 
 # -----------------------------------------------------------------------------
 # MOTOR PREDITIVO: MONTAGEM DO PACIENTE E CÁLCULO DO RISCO
@@ -79,7 +121,7 @@ novo_paciente = pd.DataFrame([{
     'apgar5': input_apgar5,
     'semana_gestacao': input_semana,
     'idade_mae': input_idade_mae,
-    'sexo_IGN': False,
+    'anomalia_cong': 1 if input_anomalia == "Sim" else 0,
     'sexo_M': True if input_sexo == "Masculino" else False
 }])[colunas_esperadas]
 
@@ -141,10 +183,11 @@ with tab1:
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=prob_individual * 100,
+            number={'font': {'size': 38}},
             domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Índice Preditivo (%)", 'font': {'size': 14}},
+            title={'text': "Índice Preditivo (%)", 'font': {'size': 16}},
             gauge={
-                'axis': {'range': [0, 100]},
+                'axis': {'range': [0, 100], 'dtick': 20},
                 'bar': {'color': cor_categoria},
                 'steps': [
                     {'range': [0, p80_cut * 100], 'color': "#D1FAE5"},
@@ -158,8 +201,13 @@ with tab1:
                 }
             }
         ))
-        fig_gauge.update_layout(height=240, margin=dict(l=20, r=20, t=30, b=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+        fig_gauge.update_layout(
+            width=330,
+            height=240,
+            margin=dict(l=20, r=25, t=30, b=20)
+        )
+        st.plotly_chart(fig_gauge, use_container_width=False)
+
     with col_pred2:
         html_card = (
             f'<div class="{classe_card}">'
@@ -171,14 +219,14 @@ with tab1:
 
 # --- ABA 2: GRÁFICOS DA COORTE (VIA POSTGRESQL ZIMAOS) ---
 with tab2:
-    st.subheader("Indicadores Monitorados (Ceará 2019 - 2024)")
+    st.subheader("Indicadores Monitorados (Coorte Saneada - Ceará 2019 a 2024)")
 
     total_nascimentos = len(df_coorte)
     total_obitos = df_coorte['obito_neonatal'].sum()
     taxa_mortalidade = (total_obitos / total_nascimentos) * 1000
 
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("Total de Nascimentos (Base)", f"{total_nascimentos:,}".replace(',', '.'))
+    kpi1.metric("Total de Nascimentos (Saneados)", f"{total_nascimentos:,}".replace(',', '.'))
     kpi2.metric("Óbitos Pareados", f"{total_obitos:,}".replace(',', '.'))
     kpi3.metric("Taxa de Mortalidade", f"{taxa_mortalidade:.2f} / 1.000")
     kpi4.metric("Estrato de Alto Risco", "Top 5,00 %")
@@ -193,13 +241,7 @@ with tab2:
         st.plotly_chart(fig_peso, use_container_width=True)
 
     with col_chart2:
-        # 1. Filtra mantendo apenas notas válidas de Apgar (0 a 10), ignorando o código 99 do SUS
-        df_apgar_valido = df_coorte[(df_coorte['apgar5'] >= 0) & (df_coorte['apgar5'] <= 10)]
-
-        # 2. Agrupa e calcula a taxa de letalidade (%)
-        taxa_apgar = df_apgar_valido.groupby('apgar5', observed=False)['obito_neonatal'].mean() * 100
-
-        # 3. Cria o gráfico de linha
+        taxa_apgar = df_coorte.groupby('apgar5', observed=False)['obito_neonatal'].mean() * 100
         fig_apgar = px.line(
             x=taxa_apgar.index,
             y=taxa_apgar.values,
@@ -208,10 +250,7 @@ with tab2:
             markers=True,
             color_discrete_sequence=['#EF4444']
         )
-
-        # 4. Força o eixo X a exibir todas as notas numéricas de 0 a 10 (de 1 em 1)
         fig_apgar.update_xaxes(dtick=1, range=[-0.3, 10.3])
-
         st.plotly_chart(fig_apgar, use_container_width=True)
 
 # --- ABA 3: EXPLICABILIDADE CLÍNICA (ODDS RATIO) ---
@@ -220,19 +259,40 @@ with tab3:
     st.markdown(
         "A Odds Ratio (Razão de Chances) demonstra o fator multiplicador do risco de vida atrelado a cada variável inserida.")
 
+    nomes_clinicos = {
+        'anomalia_cong': 'Anomalia Congênita',
+        'sexo_M': 'Sexo Masculino',
+        'idade_mae': 'Idade Materna (anos)',
+        'peso': 'Peso ao Nascer (g)',
+        'semana_gestacao': 'Idade Gestacional (semanas)',
+        'apgar5': 'Apgar 5º Minuto'
+    }
+
     coefs = modelo.coef_[0]
     odds = np.exp(coefs)
 
-    df_or = pd.DataFrame(
-        {'Atributo Clínico': colunas_esperadas, 'Coeficiente (Beta)': coefs, 'Odds Ratio (e^Beta)': odds}).sort_values(
-        by='Odds Ratio (e^Beta)', ascending=False)
+    df_or = pd.DataFrame({
+        'Atributo Clínico': [nomes_clinicos.get(col, col) for col in colunas_esperadas],
+        'Coeficiente (Beta)': coefs,
+        'Odds Ratio (e^Beta)': odds
+    }).sort_values(by='Odds Ratio (e^Beta)', ascending=False)
 
     col_or1, col_or2 = st.columns([1, 1.2])
     with col_or1:
-        st.dataframe(df_or.style.format({'Coeficiente (Beta)': '{:.4f}', 'Odds Ratio (e^Beta)': '{:.4f}'}),
-                     use_container_width=True)
+        st.dataframe(
+            df_or.style.format({'Coeficiente (Beta)': '{:.4f}', 'Odds Ratio (e^Beta)': '{:.4f}'}),
+            use_container_width=True,
+            hide_index=True
+        )
     with col_or2:
-        fig_or = px.bar(df_or, x='Odds Ratio (e^Beta)', y='Atributo Clínico', orientation='h',
-                        title="Impacto e Fator de Risco por Variável (Odds Ratio)", color='Odds Ratio (e^Beta)',
-                        color_continuous_scale='Reds')
+        fig_or = px.bar(
+            df_or,
+            x='Odds Ratio (e^Beta)',
+            y='Atributo Clínico',
+            orientation='h',
+            title="Impacto e Fator de Risco por Variável (Odds Ratio)",
+            color='Odds Ratio (e^Beta)',
+            color_continuous_scale='Reds'
+        )
+        fig_or.update_yaxes(autorange="reversed")
         st.plotly_chart(fig_or, use_container_width=True)
