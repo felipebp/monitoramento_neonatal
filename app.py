@@ -1,10 +1,20 @@
+import os
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import joblib
+from dotenv import load_dotenv
 from sqlalchemy import create_engine
+
+# -----------------------------------------------------------------------------
+# CONFIGURAÇÃO DE AMBIENTE E CAMINHOS
+# -----------------------------------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "models" / "modelo_neonatal.pkl"
+load_dotenv(BASE_DIR / ".env")
 
 # -----------------------------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA STREAMLIT
@@ -51,20 +61,46 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+def obter_db_url() -> str:
+    """Obtém a URL do PostgreSQL via .env, variáveis de ambiente ou st.secrets."""
+    if os.getenv("DATABASE_URL"):
+        return os.getenv("DATABASE_URL")
+
+    # Suporte opcional ao Streamlit Community Cloud (st.secrets)
+    try:
+        if "DATABASE_URL" in st.secrets:
+            return st.secrets["DATABASE_URL"]
+    except Exception:
+        pass
+
+    user = os.getenv("DB_USER", "postgres")
+    password = os.getenv("DB_PASSWORD")
+    host = os.getenv("DB_HOST", "localhost")
+    port = os.getenv("DB_PORT", "5432")
+    dbname = os.getenv("DB_NAME", "datasus_neonatal")
+
+    if not password:
+        st.error("Credenciais do PostgreSQL não encontradas. Configure o arquivo '.env' na raiz do projeto.")
+        st.stop()
+
+    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
+
+
 # -----------------------------------------------------------------------------
-# CARREGAMENTO DO MODELO (.PKL) E DA BASE (POSTGRESQL NO ZIMAOS)
+# CARREGAMENTO DO MODELO (.PKL) E DA BASE (POSTGRESQL)
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def carregar_modelo_preditivo():
-    artefato = joblib.load('models/modelo_neonatal.pkl')
+    if not MODEL_PATH.exists():
+        st.error(f"Arquivo do modelo não encontrado em: {MODEL_PATH}")
+        st.stop()
+    artefato = joblib.load(MODEL_PATH)
     return artefato['modelo'], artefato['p80'], artefato['p95'], artefato['colunas']
 
 
 @st.cache_data
 def carregar_dados_coorte():
-    # Conecta diretamente no banco de dados hospedado no ZimaOS e aplica o saneamento
-    db_url = "postgresql+psycopg2://casaos:casaos@192.168.4.2:5432/casaos"
-    engine = create_engine(db_url)
+    engine = create_engine(obter_db_url())
     query = """
         SELECT 
             peso, 
@@ -217,7 +253,7 @@ with tab1:
         )
         st.markdown(html_card, unsafe_allow_html=True)
 
-# --- ABA 2: GRÁFICOS DA COORTE (VIA POSTGRESQL ZIMAOS) ---
+# --- ABA 2: GRÁFICOS DA COORTE (VIA POSTGRESQL) ---
 with tab2:
     st.subheader("Indicadores Monitorados (Coorte Saneada - Ceará 2019 a 2024)")
 
@@ -253,11 +289,13 @@ with tab2:
         fig_apgar.update_xaxes(dtick=1, range=[-0.3, 10.3])
         st.plotly_chart(fig_apgar, use_container_width=True)
 
-# --- ABA 3: EXPLICABILIDADE CLÍNICA (ODDS RATIO) ---
+# --- ABA 3: EXPLICABILIDADE CLÍNICA (ODDS RATIO & PESOS) ---
 with tab3:
     st.subheader("Pesos do Modelo Preditivo (Explicabilidade para a Bancada Médica)")
     st.markdown(
-        "A Odds Ratio (Razão de Chances) demonstra o fator multiplicador do risco de vida atrelado a cada variável inserida.")
+        "O modelo separa **Fatores de Agravo** (aumentam a probabilidade de óbito) e **Fatores de Proteção** "
+        "(reduzem o risco a cada unidade clínica ganha, como pontos de Apgar, semanas de gestação ou gramas de peso)."
+    )
 
     nomes_clinicos = {
         'anomalia_cong': 'Anomalia Congênita',
@@ -274,25 +312,51 @@ with tab3:
     df_or = pd.DataFrame({
         'Atributo Clínico': [nomes_clinicos.get(col, col) for col in colunas_esperadas],
         'Coeficiente (Beta)': coefs,
-        'Odds Ratio (e^Beta)': odds
-    }).sort_values(by='Odds Ratio (e^Beta)', ascending=False)
+        'Odds Ratio (e^Beta)': odds,
+        'Impacto Absoluto': np.abs(coefs),
+        'Direção Clínica': np.where(coefs > 0, 'Fator de Agravo (+Risco)', 'Fator de Proteção (-Risco)')
+    }).sort_values(by='Impacto Absoluto', ascending=False)
 
-    col_or1, col_or2 = st.columns([1, 1.2])
+    col_or1, col_or2 = st.columns([1.05, 1.15], gap="large", vertical_alignment="top")
+
     with col_or1:
+        st.markdown("##### Tabela de Parâmetros e Razão de Chances")
+        df_tabela = df_or[['Atributo Clínico', 'Coeficiente (Beta)', 'Odds Ratio (e^Beta)', 'Direção Clínica']]
         st.dataframe(
-            df_or.style.format({'Coeficiente (Beta)': '{:.4f}', 'Odds Ratio (e^Beta)': '{:.4f}'}),
+            df_tabela.style.format({'Coeficiente (Beta)': '{:+.4f}', 'Odds Ratio (e^Beta)': '{:.4f}'}),
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            height=248
         )
+
     with col_or2:
+        st.markdown("##### Magnitude e Direção do Impacto Clínico (Log-Odds / Beta)")
         fig_or = px.bar(
             df_or,
-            x='Odds Ratio (e^Beta)',
+            x='Coeficiente (Beta)',
             y='Atributo Clínico',
             orientation='h',
-            title="Impacto e Fator de Risco por Variável (Odds Ratio)",
-            color='Odds Ratio (e^Beta)',
-            color_continuous_scale='Reds'
+            color='Direção Clínica',
+            color_discrete_map={
+                'Fator de Agravo (+Risco)': '#EF4444',
+                'Fator de Proteção (-Risco)': '#10B981'
+            }
         )
-        fig_or.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig_or, use_container_width=True)
+        fig_or.add_vline(x=0, line_width=1.5, line_color="#9CA3AF")
+        fig_or.update_yaxes(autorange="reversed", title=None)
+        fig_or.update_xaxes(title="Peso Log-Odds (Esquerda: Proteção | Direita: Agravo)")
+        fig_or.update_layout(
+            height=265,
+            margin=dict(l=10, r=10, t=10, b=35),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(
+                title=None,
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        st.plotly_chart(fig_or, use_container_width=True, config={"displayModeBar": False})

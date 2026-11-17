@@ -1,0 +1,13 @@
+basedosdados
+ipykernel
+joblib
+jupyterlab
+numpy
+pandas
+plotly
+psycopg2-binary
+pyarrow
+python-dotenv
+scikit-learn
+SQLAlchemy
+streamlit

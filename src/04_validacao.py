@@ -26,25 +26,41 @@ def criar_engine():
 
 
 def auditar_linkage(df: pd.DataFrame) -> None:
-    total_pareados = len(df)
-    total_obitos = int(df["obito_neonatal"].sum())
-    taxa_por_mil = (total_obitos / total_pareados * 1000) if total_pareados > 0 else 0.0
+    # 1. Métricas da base bruta pareada
+    total_bruto = len(df)
+    obitos_bruto = int(df["obito_neonatal"].sum())
+    taxa_bruta = (obitos_bruto / total_bruto * 1000) if total_bruto > 0 else 0.0
 
-    print("=" * 55)
-    print("RELATÓRIO DE AUDITORIA DO LINKAGE (CEARÁ)")
-    print("=" * 55)
-    print(f"Total de registros pareados : {total_pareados:,}")
-    print(f"Quantidade de óbitos (CE)   : {total_obitos:,}")
-    print(f"Taxa de mortalidade neonatal: {taxa_por_mil:.2f} por 1.000 NV")
-    print("=" * 55)
+    # 2. Métricas após os filtros clínicos aplicados no modelo
+    df_saneado = df[
+        df["sexo"].str.strip().isin(["M", "F"])
+        & df["id_anomalia"].str.strip().isin(["1", "2"])
+        & df["apgar5"].between(0, 10)
+        & df["semana_gestacao"].notna()
+        & df["peso"].notna()
+        & df["idade_mae"].notna()
+    ]
+    total_saneado = len(df_saneado)
+    obitos_saneado = int(df_saneado["obito_neonatal"].sum())
+    taxa_saneada = (obitos_saneado / total_saneado * 1000) if total_saneado > 0 else 0.0
+
+    print("=" * 60)
+    print("RELATÓRIO DE AUDITORIA DO LINKAGE E SANEAMENTO (CEARÁ)")
+    print("=" * 60)
+    print(f"[1] Base Bruta Pareada  : {total_bruto:,} NV | {obitos_bruto:,} óbitos ({taxa_bruta:.2f}/1.000)")
+    print(f"[2] Coorte Saneada (ML) : {total_saneado:,} NV | {obitos_saneado:,} óbitos ({taxa_saneada:.2f}/1.000)")
+    print(f"    Registros excluídos : {total_bruto - total_saneado:,} (campos nulos ou ignorados)")
+    print("=" * 60)
 
 
 def main() -> None:
     engine = criar_engine()
-    query = "SELECT obito_neonatal FROM analytics.base_neonatal_pura;"
+    query = """
+        SELECT peso, apgar5, semana_gestacao, idade_mae, id_anomalia, sexo, obito_neonatal
+        FROM analytics.base_neonatal_pura;
+    """
     df = pd.read_sql(query, con=engine)
     auditar_linkage(df)
-
 
 if __name__ == "__main__":
     main()
