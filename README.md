@@ -46,12 +46,32 @@ O desafio técnico deste projeto consiste em **unificar duas bases governamentai
 * **Interpretabilidade Clínica com Regressão Logística:** Optou-se por um modelo linear generalizado calibrado para permitir a leitura direta dos coeficientes em **Odds Ratio (Razão de Chances)**, evidenciando o peso isolado de variáveis como *Apgar no 5º minuto*, *peso ao nascer*, *semanas de gestação*, *idade materna*, *presença de anomalia congênita* e *sexo*.
 * **Estratificação por Percentis de Risco (P80 / P95):** Em vez de um corte binário genérico de 50%, os limiares de alerta foram calibrados sobre a distribuição real de probabilidades da coorte para separar perfis de **Risco Habitual**, **Atenção Prioritária (≥ P80)** e **Alto Risco / UTI Neonatal (≥ P95)**.
 * **Arquitetura Híbrida (PostgreSQL + Fallback Parquet):** O `app.py` conecta-se diretamente ao banco PostgreSQL quando as credenciais estão configuradas no `.env`, mas alterna automaticamente para a coorte otimizada em `data/processed/coorte_ceara.parquet` caso executado em ambiente offline ou sem banco ativo.
+---
+
+## 🩺 Diretrizes Clínicas e Critérios de Estratificação
+
+A construção das regras de negócio, a seleção das variáveis preditoras e a definição das faixas de alerta do simulador apoiam-se em três pilares metodológicos:
+
+1. **Definições Epidemiológicas Oficiais (DATASUS / Ministério da Saúde e OMS):**
+   * **Desfecho de Óbito Neonatal:** Segue a padronização da Organização Mundial da Saúde (OMS) e do Sistema de Informações sobre Mortalidade (**SIM**), contemplando todo óbito ocorrido entre **0 e 27 dias completos de vida** (soma do período neonatal precoce, de 0 a 6 dias, e tardio, de 7 a 27 dias).
+   * **Parâmetros Perinatais:** Os indicadores clínicos selecionados (`peso`, `semana_gestacao`, `idade_mae`, `id_anomalia` e `sexo`) e os marcos clássicos de atenção perinatal — como baixo peso ao nascer (**< 2.500 g**) e prematuridade (**< 37 semanas**) — seguem os dicionários técnicos do **SINASC/DATASUS**.
+
+2. **Avaliação de Vitalidade pelo Escore de Apgar no 5º Minuto (StatPearls / NCBI):**
+   * A adoção do **Apgar no 5º minuto** como principal indicador de vitalidade pós-natal e resposta à reanimação — categorizado clinicamente em **normal/tranquilizador (7 a 10)**, **moderadamente anormal (4 a 6)** e **crítico (0 a 3)** — fundamenta-se na revisão clínica *Apgar Score* publicada pelo *National Center for Biotechnology Information* (NCBI / StatPearls, `NBK430782`).
+
+3. **Faixas de Alerta do Simulador (Calibração Empírica P80 / P95):**
+   * Como o óbito neonatal é um evento estatisticamente raro (desbalanceamento severo de classes), aplicar um corte genérico de **50% (0,50)** subestimaria casos graves. Por isso, os três níveis de alerta do painel — **Risco Habitual**, **Atenção Prioritária (≥ P80)** e **Alto Risco / Vigilância Intensiva (≥ P95)** — foram calibrados empiricamente sobre a distribuição real de probabilidades estimadas pelo modelo na coorte histórica do Ceará.
+> [!IMPORTANT]
+  > **Escopo de Apoio à Decisão:** Os estratos de risco gerados pelo **NeonatoScan** refletem associações estatísticas populacionais e têm finalidade estritamente **epidemiológica e educativa**. O modelo **não deve orientar isoladamente a conduta médica**, sendo indispensável a avaliação clínica presencial, a análise individualizada do contexto perinatal e o julgamento profissional de uma equipe de saúde habilitada.
+---
 
 ## 📊 Funcionalidades do Painel (`app.py`)
 
 * **Panorama Epidemiológico:** Indicadores gerais da coorte estadual, taxa de mortalidade neonatal e distribuição demográfica e clínica dos nascimentos.
 * **Fatores de Risco (Odds Ratio):** Visualização divergente bicolor que destaca fatores agravantes e protetores com base nos pesos do modelo treinado.
 * **Simulador de Triagem Neonatal:** Formulário interativo para inserção de parâmetros clínicos do recém-nascido em tempo real, retornando a probabilidade estimada de risco e a faixa de encaminhamento sugerida.
+
+---
 
 ## 📂 Estrutura do Repositório
 ```text
@@ -116,6 +136,11 @@ Caso deseje executar a ingestão e o *linkage* em uma instância própria do Pos
 2. Copie o arquivo `.env.example` para `.env` e preencha as credenciais do seu servidor PostgreSQL.
 3. Execute os scripts da pasta `src/` na ordem numérica (`01` a `04`) e rode `sql/linkage_ceara.sql` no banco antes de iniciar o `app.py`.
 
+## 📚 Referências Técnicas e Epidemiológicas
+
+* **DATASUS / Ministério da Saúde (Brasil):** Sistema de Informações sobre Nascidos Vivos (SINASC) e Sistema de Informações sobre Mortalidade (SIM) — microdados consolidados via projeto *Base dos Dados*.
+* **Simon, L. V.; Hashmi, M. F.; Bragg, B. N.** *Apgar Score*. StatPearls [Internet]. Treasure Island (FL): StatPearls Publishing; NCBI Bookshelf ID: `NBK430782`. Disponível em: [https://www.ncbi.nlm.nih.gov/books/NBK430782/](https://www.ncbi.nlm.nih.gov/books/NBK430782/).
+
 ## 🛠️ Stack Tecnológica
 
 - Linguagem & Manipulação de Dados: Python, Pandas, NumPy, PyArrow
@@ -128,8 +153,6 @@ Caso deseje executar a ingestão e o *linkage* em uma instância própria do Pos
 
 ## 👤 Autor
 
-Felipe Barros Pereira
-
-Graduando em Ciência de Dados — Universidade Federal de Mato Grosso do Sul (UFMS)
-
-Projeto desenvolvido para fins acadêmicos e de portfólio em Ciência e Engenharia de Dados.
+**Felipe Barros Pereira**  
+Graduando em Ciência de Dados — Universidade Federal de Mato Grosso do Sul (UFMS)  
+*Projeto desenvolvido para fins acadêmicos e de portfólio em Ciência e Engenharia de Dados.*
